@@ -100,6 +100,8 @@ screeninfo>=0.8
 4. As coordenadas do olhar são transmitidas ao frontend via **WebSocket** (Flask-SocketIO).
 5. A interface web exibe o ponto de gaze sobre a tela em tempo real.
 
+   https://drive.google.com/file/d/1frebAUAH938pHxTniCnRxTEigYFc1nut/view?usp=drive_link
+
 ---
 
 ## 📄 Licença
