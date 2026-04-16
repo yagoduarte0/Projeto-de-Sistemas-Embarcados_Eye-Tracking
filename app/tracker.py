@@ -30,6 +30,8 @@ NOSE_TIP                     =   4        # ponta do nariz
 # ── Thresholds ────────────────────────────────────────────────────────────────
 IRIS_SIDE_LOW   = 0.33   # ratio < → olhando para esquerda
 IRIS_SIDE_HIGH  = 0.67   # ratio > → olhando para direita
+IRIS_V_LOW      = 0.25   # ratio vertical < → olhando para cima
+IRIS_V_HIGH     = 0.75   # ratio vertical > → olhando para baixo
 HEAD_YAW_THRESH = 0.18   # desvio normalizado do nariz
 EAR_THRESHOLD   = 0.18   # EAR abaixo = olho fechado
 BLINK_SUSTAINED_SECS   = 2.5
@@ -165,10 +167,10 @@ class StudyTracker:
                 if not ret:
                     continue
 
-                iris_ratio, head_yaw, blink = self._extract(frame)
+                iris_ratio, head_yaw, blink, v_iris = self._extract(frame)
                 now = time.time()
 
-                is_distracted = self._detect(iris_ratio, head_yaw, blink, now)
+                is_distracted = self._detect(iris_ratio, v_iris, head_yaw, blink, now)
 
                 if is_distracted:
                     if self._distraction_start is None:
@@ -189,6 +191,7 @@ class StudyTracker:
 
                 self.last_raw = {
                     "iris_ratio": round(iris_ratio, 3) if iris_ratio is not None else None,
+                    "v_iris":     round(v_iris,     3) if v_iris     is not None else None,
                     "head_yaw":   round(head_yaw,   3) if head_yaw   is not None else None,
                     "blink":      blink,
                     "side_frames": self._side_frames,
@@ -210,7 +213,7 @@ class StudyTracker:
         result = self._landmarker.detect(mp_img)
 
         if not result.face_landmarks:
-            return None, None, False
+            return None, None, False, None
 
         lm = result.face_landmarks[0]   # lista de NormalizedLandmark
 
@@ -224,7 +227,18 @@ class StudyTracker:
         r_ratio = ratio(R_IRIS, R_EYE_LEFT, R_EYE_RIGHT)
         l_ratio = ratio(L_IRIS, L_EYE_LEFT, L_EYE_RIGHT)
         vals = [v for v in [r_ratio, l_ratio] if v is not None]
-        iris_ratio = float(np.mean(vals)) if vals else None
+        iris_ratio = float(max(vals, key=lambda v: abs(v - 0.5))) if vals else None
+
+        # ── íris ratio vertical (cima/baixo) ──────────────────────────────────
+        def v_ratio(iris_i, top_i, bot_i):
+            h = lm[bot_i].y - lm[top_i].y   # y cresce para baixo no MediaPipe
+            if h < 1e-4:
+                return None
+            return (lm[iris_i].y - lm[top_i].y) / h
+
+        v_vals = [v for v in [v_ratio(R_IRIS, R_EYE_TOP, R_EYE_BOTTOM),
+                               v_ratio(L_IRIS, L_EYE_TOP, L_EYE_BOTTOM)] if v is not None]
+        v_iris = float(max(v_vals, key=lambda v: abs(v - 0.5))) if v_vals else None
 
         # ── head yaw: nariz deslocado em relação ao centro dos olhos ─────────
         eye_cx    = (lm[R_EYE_LEFT].x + lm[L_EYE_RIGHT].x) / 2
@@ -241,18 +255,25 @@ class StudyTracker:
                    ear(L_EYE_TOP, L_EYE_BOTTOM, L_EYE_LEFT, L_EYE_RIGHT)) / 2
         blink = avg_ear < EAR_THRESHOLD
 
-        return iris_ratio, head_yaw, blink
+        return iris_ratio, head_yaw, blink, v_iris
 
     # ── Detecção ──────────────────────────────────────────────────────────────
 
-    def _detect(self, iris_ratio, head_yaw, blink, now) -> bool:
+    def _detect(self, iris_ratio, v_iris, head_yaw, blink, now) -> bool:
         distracted = False
 
-        # olhar para o lado: íris fora do centro OU cabeça virada
         looking_side = False
-        if iris_ratio is not None:
+        if iris_ratio is None and head_yaw is None:
+            # sem face detectada — olhos fora do campo da câmera
+            looking_side = True
+        elif iris_ratio is not None:
+            # horizontal: íris fora do centro
             looking_side = not (IRIS_SIDE_LOW <= iris_ratio <= IRIS_SIDE_HIGH)
-        if head_yaw is not None and abs(head_yaw) > HEAD_YAW_THRESH:
+            # vertical: olhando para cima ou para baixo
+            if not looking_side and v_iris is not None:
+                looking_side = not (IRIS_V_LOW <= v_iris <= IRIS_V_HIGH)
+        elif head_yaw is not None and abs(head_yaw) > HEAD_YAW_THRESH:
+            # fallback quando íris não está disponível mas face foi detectada
             looking_side = True
 
         self._side_frames = (self._side_frames + 1) if looking_side else max(0, self._side_frames - 1)

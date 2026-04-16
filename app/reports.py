@@ -45,7 +45,7 @@ class StudyPDF(FPDF):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(128)
-        self.cell(0, 10, f"Página {self.page_no()} — Eye Tracking Study Dashboard", align="C")
+        self.cell(0, 10, f"Pagina {self.page_no()} - Eye Tracking Study Dashboard", align="C")
 
 
 def export_pdf(stats: dict) -> bytes:
@@ -153,6 +153,4 @@ def export_pdf(stats: dict) -> bytes:
                 pdf.cell(col_widths[i], 7, val, border=1, fill=fill)
             pdf.ln()
 
-    buf = io.BytesIO()
-    pdf.output(buf)
-    return buf.getvalue()
+    return bytes(pdf.output())

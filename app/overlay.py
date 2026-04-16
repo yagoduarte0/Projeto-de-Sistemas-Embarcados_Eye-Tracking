@@ -326,8 +326,10 @@ class StudyOverlay:
     def _center_top_right(self):
         self.root.update_idletasks()
         sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
         w = self.root.winfo_width()
-        self.root.geometry(f"+{sw - w - 20}+20")
+        h = self.root.winfo_height()
+        self.root.geometry(f"+{sw - w - 20}+{sh - h - 60}")
 
     def _bind_drag(self):
         self.root.bind("<ButtonPress-1>",   self._drag_start)

@@ -105,7 +105,11 @@ async function stopSession() {
 
 // ── Exportar ──────────────────────────────────────────────────────────────────
 function exportReport(format) {
-  window.open(`/api/export/${format}`, "_blank");
+  const a = document.createElement("a");
+  a.href = `/api/export/${format}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
