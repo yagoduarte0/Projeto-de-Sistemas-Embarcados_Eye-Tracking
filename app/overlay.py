@@ -101,7 +101,7 @@ class StudyOverlay:
         items = [
             ("Foco",           self._vars["focus"], PRIMARY),
             ("Distrações",     self._vars["dist"],  DANGER),
-            ("Olhares lat.",   self._vars["side"],  WARNING),
+            ("Ol. evasivos",   self._vars["side"],  WARNING),
             ("Perda de foco",  self._vars["lost"],  YELLOW),
         ]
 
@@ -193,7 +193,7 @@ class StudyOverlay:
         # métricas
         rows = [
             ("Distrações totais",   stats.get("total_distractions", 0),    DANGER),
-            ("Olhares para o lado", stats.get("side_gaze_count", 0),        WARNING),
+            ("Olhares evasivos",    stats.get("gaze_away_count", 0),         WARNING),
             ("Perdas de foco",      stats.get("focus_lost_count", 0),       YELLOW),
             ("Tempo distraído",     f"{stats.get('total_distraction_secs', 0):.0f}s", MUTED),
         ]
@@ -295,7 +295,7 @@ class StudyOverlay:
             stats = session.to_dict()
             self._vars["focus"].set(f"{stats['focus_percentage']:.0f}%")
             self._vars["dist"].set(str(stats["total_distractions"]))
-            self._vars["side"].set(str(stats["side_gaze_count"]))
+            self._vars["side"].set(str(stats["gaze_away_count"]))
             self._vars["lost"].set(str(stats["focus_lost_count"]))
 
     def _find_label(self, widget, var):

@@ -139,7 +139,7 @@ function updateMetrics(stats) {
   document.getElementById("m-focus").textContent =
     stats.focus_percentage != null ? `${stats.focus_percentage.toFixed(1)}%` : "—";
   document.getElementById("m-distractions").textContent = stats.total_distractions ?? 0;
-  document.getElementById("m-side").textContent = stats.side_gaze_count ?? 0;
+  document.getElementById("m-side").textContent = stats.gaze_away_count ?? 0;
   document.getElementById("m-focus-lost").textContent = stats.focus_lost_count ?? 0;
 
   const focused = (stats.focus_percentage ?? 100) > 70;
@@ -172,7 +172,7 @@ function addEventItem(ev) {
   if (empty) empty.remove();
 
   const kindLabels = {
-    side_gaze: "Olhar lateral",
+    side_gaze: "Olhar evasivo",
     distraction: "Distração",
     focus_lost: "Perda de foco",
     refocus: "Refoco",

@@ -175,7 +175,7 @@
       </div>
       <div class="stat-card">
         <div class="val accent-orange" id="side-gaze">0</div>
-        <div class="lbl">Olhares laterais</div>
+        <div class="lbl">Olhares evasivos</div>
       </div>
       <div class="stat-card">
         <div class="val accent-yellow" id="focus-lost">0</div>
@@ -228,7 +228,7 @@
       distSecs >= 60 ? `${Math.floor(distSecs/60)}m ${Math.floor(distSecs%60)}s` : `${Math.floor(distSecs)}s`;
 
     document.getElementById("total-dist").textContent = stats.total_distractions ?? 0;
-    document.getElementById("side-gaze").textContent  = stats.side_gaze_count ?? 0;
+    document.getElementById("side-gaze").textContent  = stats.gaze_away_count ?? 0;
     document.getElementById("focus-lost").textContent = stats.focus_lost_count ?? 0;
 
     document.getElementById("generated-at").textContent =
@@ -273,7 +273,7 @@
       container.innerHTML = '<p class="no-events">Nenhum evento registrado.</p>';
     } else {
       const kindLabels = {
-        side_gaze: "Olhar lateral",
+        side_gaze: "Olhar evasivo",
         distraction: "Distração",
         focus_lost: "Perda de foco",
       };

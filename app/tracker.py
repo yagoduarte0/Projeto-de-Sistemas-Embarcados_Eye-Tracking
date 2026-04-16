@@ -54,7 +54,7 @@ class SessionStats:
     start_time: float = field(default_factory=time.time)
     end_time: Optional[float] = None
     total_distractions: int = 0
-    side_gaze_count: int = 0
+    gaze_away_count: int = 0
     focus_lost_count: int = 0
     total_distraction_secs: float = 0.0
     events: list = field(default_factory=list)
@@ -75,7 +75,7 @@ class SessionStats:
             "duration_secs":          round(self.duration_secs, 1),
             "focus_percentage":       round(self.focus_percentage, 1),
             "total_distractions":     self.total_distractions,
-            "side_gaze_count":        self.side_gaze_count,
+            "gaze_away_count":        self.gaze_away_count,
             "focus_lost_count":       self.focus_lost_count,
             "total_distraction_secs": round(self.total_distraction_secs, 1),
             "events": [
@@ -282,11 +282,15 @@ class StudyTracker:
             distracted = True
             if now - self._last_side_event > DISTRACTION_COOLDOWN:
                 self._last_side_event = now
-                if iris_ratio is not None:
-                    direction = "esquerda" if iris_ratio < 0.5 else "direita"
+                if iris_ratio is not None and not (IRIS_SIDE_LOW <= iris_ratio <= IRIS_SIDE_HIGH):
+                    direction = "a esquerda" if iris_ratio < 0.5 else "a direita"
+                elif v_iris is not None and not (IRIS_V_LOW <= v_iris <= IRIS_V_HIGH):
+                    direction = "cima" if v_iris < 0.5 else "baixo"
+                elif head_yaw is not None:
+                    direction = "a esquerda" if head_yaw < 0 else "a direita"
                 else:
-                    direction = "esquerda" if (head_yaw or 0) < 0 else "direita"
-                self._register_event("side_gaze", now, f"olhando para o {direction}")
+                    direction = "fora da camera"
+                self._register_event("side_gaze", now, f"olhando para {direction}")
 
         # olhos fechados por muito tempo
         if blink:
@@ -308,7 +312,7 @@ class StudyTracker:
         ev = Event(kind=kind, timestamp=ts, detail=detail)
         self.session.events.append(ev)
         if kind == "side_gaze":
-            self.session.side_gaze_count += 1
+            self.session.gaze_away_count += 1
             self.session.total_distractions += 1
         elif kind == "distraction":
             self.session.total_distractions += 1
