@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resultados da Sessão — Study Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    .results-wrapper {
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 24px 60px;
+    }
+    .results-header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .results-header h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .results-header p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .big-focus {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 20px;
+    }
+    .big-focus-value {
+      font-size: 72px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .big-focus-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .7px;
+      margin-top: 6px;
+    }
+    .big-focus-divider {
+      width: 1px;
+      height: 70px;
+      background: var(--border);
+    }
+    .big-focus-dur {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) { .stats-row { grid-template-columns: 1fr 1fr; } }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 14px;
+      text-align: center;
+    }
+    .stat-card .val {
+      font-size: 36px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-card .lbl {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    .timeline-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .timeline-card h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .7px;
+      margin-bottom: 16px;
+    }
+    .event-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--surface2);
+      margin-bottom: 6px;
+      font-size: 13px;
+      border-left: 3px solid var(--border);
+    }
+    .event-row.side_gaze   { border-color: var(--warning); }
+    .event-row.distraction { border-color: var(--danger); }
+    .event-row.focus_lost  { border-color: var(--yellow); }
+    .event-time { color: var(--text-muted); font-size: 11px; min-width: 48px; }
+    .event-badge {
+      padding: 2px 9px; border-radius: 20px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+    }
+    .event-badge.side_gaze   { background: rgba(255,179,71,.18); color: var(--warning); }
+    .event-badge.distraction { background: rgba(255,77,109,.18);  color: var(--danger); }
+    .event-badge.focus_lost  { background: rgba(255,209,102,.18); color: var(--yellow); }
+    .no-events { color: var(--text-muted); font-style: italic; font-size: 13px; }
+    .export-row {
+      display: flex;
+      gap: 12px;
+    }
+    .export-row .btn {
+      flex: 1;
+      text-align: center;
+      padding: 12px;
+      font-size: 14px;
+    }
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="results-wrapper">
+
+    <!-- Cabeçalho -->
+    <div class="results-header">
+      <h1>Relatório da Sessão</h1>
+      <p id="generated-at"></p>
+    </div>
+
+    <!-- Foco grande + duração -->
+    <div class="big-focus">
+      <div>
+        <div class="big-focus-value" id="focus-pct" style="color: var(--primary)">—</div>
+        <div class="big-focus-label">Foco geral</div>
+      </div>
+      <div class="big-focus-divider"></div>
+      <div>
+        <div class="big-focus-dur" id="duration">—</div>
+        <div class="big-focus-label">Duração</div>
+      </div>
+      <div class="big-focus-divider"></div>
+      <div>
+        <div class="big-focus-dur" id="dist-time" style="color: var(--danger)">—</div>
+        <div class="big-focus-label">Tempo distraído</div>
+      </div>
+    </div>
+
+    <!-- Cartões de métricas -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="val accent-red"  id="total-dist">0</div>
+        <div class="lbl">Distrações totais</div>
+      </div>
+      <div class="stat-card">
+        <div class="val accent-orange" id="side-gaze">0</div>
+        <div class="lbl">Olhares laterais</div>
+      </div>
+      <div class="stat-card">
+        <div class="val accent-yellow" id="focus-lost">0</div>
+        <div class="lbl">Perdas de foco</div>
+      </div>
+    </div>
+
+    <!-- Gráfico de distrações -->
+    <div class="timeline-card">
+      <h2>Distrações ao longo do tempo</h2>
+      <canvas id="dist-chart" height="90"></canvas>
+    </div>
+
+    <!-- Linha do tempo de eventos -->
+    <div class="timeline-card">
+      <h2>Linha do tempo</h2>
+      <div id="events-container"></div>
+    </div>
+
+    <!-- Exportar -->
+    <div class="export-row">
+      <a href="/api/export/pdf" class="btn btn-primary" style="text-decoration:none;display:block;">
+        Baixar PDF
+      </a>
+      <a href="/api/export/csv" class="btn btn-secondary" style="text-decoration:none;display:block;">
+        Baixar CSV
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    const stats = {{ stats | tojson }};
+
+    // ── Preencher métricas ─────────────────────────────────────────────────
+    const dur = stats.duration_secs || 0;
+    const mins = String(Math.floor(dur / 60)).padStart(2, "0");
+    const secs = String(Math.floor(dur % 60)).padStart(2, "0");
+    document.getElementById("duration").textContent = `${mins}m ${secs}s`;
+
+    const focusPct = stats.focus_percentage ?? 0;
+    const focusEl = document.getElementById("focus-pct");
+    focusEl.textContent = `${focusPct.toFixed(1)}%`;
+    if (focusPct >= 70) focusEl.style.color = "var(--success)";
+    else if (focusPct >= 40) focusEl.style.color = "var(--warning)";
+    else focusEl.style.color = "var(--danger)";
+
+    const distSecs = stats.total_distraction_secs || 0;
+    document.getElementById("dist-time").textContent =
+      distSecs >= 60 ? `${Math.floor(distSecs/60)}m ${Math.floor(distSecs%60)}s` : `${Math.floor(distSecs)}s`;
+
+    document.getElementById("total-dist").textContent = stats.total_distractions ?? 0;
+    document.getElementById("side-gaze").textContent  = stats.side_gaze_count ?? 0;
+    document.getElementById("focus-lost").textContent = stats.focus_lost_count ?? 0;
+
+    document.getElementById("generated-at").textContent =
+      "Gerado em " + new Date().toLocaleString("pt-BR");
+
+    // ── Gráfico de distrações (barras por minuto) ──────────────────────────
+    const events = stats.events || [];
+    const totalMins = Math.max(1, Math.ceil(dur / 60));
+    const buckets = Array(totalMins).fill(0);
+    events.forEach(ev => {
+      const bucket = Math.min(Math.floor(ev.timestamp / 60), totalMins - 1);
+      buckets[bucket]++;
+    });
+
+    const ctx = document.getElementById("dist-chart").getContext("2d");
+    new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: buckets.map((_, i) => `${i + 1}m`),
+        datasets: [{
+          label: "Eventos",
+          data: buckets,
+          backgroundColor: "rgba(255,77,109,.55)",
+          borderColor: "rgba(255,77,109,.9)",
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#7b82a8" }, grid: { color: "#2c3150" } },
+          y: { ticks: { color: "#7b82a8", stepSize: 1 }, grid: { color: "#2c3150" }, beginAtZero: true },
+        },
+      },
+    });
+
+    // ── Linha do tempo ─────────────────────────────────────────────────────
+    const container = document.getElementById("events-container");
+    if (!events.length) {
+      container.innerHTML = '<p class="no-events">Nenhum evento registrado.</p>';
+    } else {
+      const kindLabels = {
+        side_gaze: "Olhar lateral",
+        distraction: "Distração",
+        focus_lost: "Perda de foco",
+      };
+      events.forEach(ev => {
+        const div = document.createElement("div");
+        div.className = `event-row ${ev.kind}`;
+        div.innerHTML = `
+          <span class="event-time">${ev.timestamp.toFixed(1)}s</span>
+          <span class="event-badge ${ev.kind}">${kindLabels[ev.kind] ?? ev.kind}</span>
+          <span>${ev.detail ?? ""}</span>
+        `;
+        container.appendChild(div);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eye Tracking Study Dashboard</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <!-- ── ALERTA ──────────────────────────────────────────────────────── -->
+  <div id="alert-banner" class="alert-banner hidden">
+    <span id="alert-text"></span>
+  </div>
+
+  <!-- ── HEADER ────────────────────────────────────────────────────────  -->
+  <header class="header">
+    <div class="header-left">
+      <span class="logo">👁 Study Tracker</span>
+    </div>
+    <div class="header-center">
+      <span id="session-timer" class="timer">00:00</span>
+    </div>
+    <div class="header-right">
+      <button id="btn-start" class="btn btn-primary" onclick="startSession()">Iniciar Sessão</button>
+      <button id="btn-stop" class="btn btn-danger hidden" onclick="stopSession()">Parar</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- ── COLUNA ESQUERDA: câmera ──────────────────────────────────── -->
+    <section class="camera-section">
+      <div class="card">
+        <h2 class="card-title">Câmera</h2>
+        <div class="camera-wrapper">
+          <img id="camera-feed" class="camera-feed" src="" alt="Feed da câmera" />
+          <div id="camera-placeholder" class="camera-placeholder">
+            <span>Sessão não iniciada</span>
+          </div>
+        </div>
+        <div id="focus-indicator" class="focus-indicator neutral">
+          <span id="focus-label">Aguardando...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── COLUNA DIREITA: métricas + gráfico ──────────────────────── -->
+    <section class="metrics-section">
+
+      <!-- Cartões de métricas -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-value" id="m-focus">—</div>
+          <div class="metric-label">Foco</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value accent-red" id="m-distractions">0</div>
+          <div class="metric-label">Distrações</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value accent-orange" id="m-side">0</div>
+          <div class="metric-label">Olhares laterais</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value accent-yellow" id="m-focus-lost">0</div>
+          <div class="metric-label">Perdas de foco</div>
+        </div>
+      </div>
+
+      <!-- Gráfico de foco ao longo do tempo -->
+      <div class="card chart-card">
+        <h2 class="card-title">Atenção ao longo da sessão</h2>
+        <canvas id="focus-chart" height="120"></canvas>
+      </div>
+
+      <!-- Linha do tempo de eventos -->
+      <div class="card events-card">
+        <h2 class="card-title">Eventos</h2>
+        <div id="events-list" class="events-list">
+          <p class="empty-state">Nenhum evento ainda.</p>
+        </div>
+      </div>
+
+      <!-- Exportar -->
+      <div class="card export-card">
+        <h2 class="card-title">Exportar relatório</h2>
+        <div class="export-buttons">
+          <button class="btn btn-export" onclick="exportReport('pdf')">Baixar PDF</button>
+          <button class="btn btn-export" onclick="exportReport('csv')">Baixar CSV</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
