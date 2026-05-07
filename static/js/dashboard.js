@@ -72,22 +72,6 @@ function stopTimer() {
 }
 
 // ── Controles de sessão ───────────────────────────────────────────────────────
-async function startSession() {
-  const res = await fetch("/api/start", { method: "POST" });
-  if (!res.ok) { alert("Erro ao iniciar sessão"); return; }
-
-  sessionRunning = true;
-  document.getElementById("btn-start").classList.add("hidden");
-  document.getElementById("btn-stop").classList.remove("hidden");
-  document.getElementById("camera-placeholder").style.display = "none";
-  document.getElementById("events-list").innerHTML = '<p class="empty-state">Aguardando eventos...</p>';
-  chartTick = 0;
-  focusChart.data.labels = [];
-  focusChart.data.datasets[0].data = [];
-  focusChart.update("none");
-  setIAFGauge(null);
-  startTimer();
-}
 
 async function stopSession() {
   const res = await fetch("/api/stop", { method: "POST" });
@@ -97,11 +81,30 @@ async function stopSession() {
   stopTimer();
   document.getElementById("btn-stop").classList.add("hidden");
   document.getElementById("btn-start").classList.remove("hidden");
+  document.getElementById("btn-resume").classList.remove("hidden");
   document.getElementById("camera-feed").src = "";
   document.getElementById("camera-placeholder").style.display = "flex";
   setFocusIndicator(null);
   setIAFGauge(null);
   if (data.stats) updateMetrics(data.stats);
+}
+
+async function startSession() {
+  const res = await fetch("/api/start", { method: "POST" });
+  if (!res.ok) { alert("Erro ao iniciar sessão"); return; }
+
+  sessionRunning = true;
+  document.getElementById("btn-start").classList.add("hidden");
+  document.getElementById("btn-stop").classList.remove("hidden");
+  document.getElementById("btn-resume").classList.add("hidden");
+  document.getElementById("camera-placeholder").style.display = "none";
+  document.getElementById("events-list").innerHTML = '<p class="empty-state">Aguardando eventos...</p>';
+  chartTick = 0;
+  focusChart.data.labels = [];
+  focusChart.data.datasets[0].data = [];
+  focusChart.update("none");
+  setIAFGauge(null);
+  startTimer();
 }
 
 // ── Exportar ──────────────────────────────────────────────────────────────────
@@ -113,14 +116,50 @@ function exportReport(format) {
   document.body.removeChild(a);
 }
 
+// ── Calibração ────────────────────────────────────────────────────────────────
+async function requestCalibration() {
+  const btn = document.getElementById("btn-calib");
+  if (btn) btn.disabled = true;
+  const res = await fetch("/api/calibrate", { method: "POST" });
+  if (res.ok) {
+    showAlert("Calibração iniciada — olhe para os pontos na janela do aplicativo.");
+  } else {
+    const d = await res.json();
+    showAlert(d.error || "Erro ao iniciar calibração.");
+  }
+  if (btn) setTimeout(() => { btn.disabled = false; }, 3000);
+}
+
+// ── Retomar sessão ────────────────────────────────────────────────────────────
+async function resumeSession() {
+  const res = await fetch("/api/resume", { method: "POST" });
+  if (!res.ok) {
+    const d = await res.json();
+    showAlert(d.error || "Erro ao retomar sessão.");
+    return;
+  }
+
+  sessionRunning = true;
+  document.getElementById("btn-start").classList.add("hidden");
+  document.getElementById("btn-stop").classList.remove("hidden");
+  document.getElementById("btn-resume").classList.add("hidden");
+  document.getElementById("camera-placeholder").style.display = "none";
+  setFocusIndicator(null);
+  setIAFGauge(null);
+  startTimer();
+}
+
 // ── Socket events ─────────────────────────────────────────────────────────────
-socket.on("frame", ({ data, iaf }) => {
+socket.on("frame", ({ data, iaf, fps, latency_ms, distracted }) => {
   if (!sessionRunning) return;
   document.getElementById("camera-feed").src = `data:image/jpeg;base64,${data}`;
   if (iaf != null) {
     setIAFGauge(iaf);
     pushIAFPoint(iaf);
   }
+  // Atualiza indicador a cada frame — única fonte confiável do estado atual
+  if (distracted !== undefined) setFocusIndicator(!distracted);
+  updatePerfIndicator(fps, latency_ms);
 });
 
 socket.on("stats_update", (stats) => {
@@ -129,8 +168,7 @@ socket.on("stats_update", (stats) => {
 
 socket.on("new_event", (ev) => {
   addEventItem(ev);
-  const isDistracted = ["side_gaze", "distraction", "focus_lost"].includes(ev.kind);
-  setFocusIndicator(isDistracted ? false : null);
+  // Indicador de foco é controlado pelo evento frame — não sobrescrever aqui
 });
 
 socket.on("alert", ({ message }) => {
@@ -150,9 +188,6 @@ function updateMetrics(stats) {
     const el = document.getElementById("m-iaf-mean");
     if (el) el.textContent = `${stats.iaf_mean.toFixed(1)}%`;
   }
-
-  const focused = (stats.focus_percentage ?? 100) > 70;
-  setFocusIndicator(focused);
 }
 
 function setFocusIndicator(focused) {
@@ -220,6 +255,15 @@ function addEventItem(ev) {
   `;
   list.prepend(item);
   while (list.children.length > 50) list.removeChild(list.lastChild);
+}
+
+function updatePerfIndicator(fps, latency_ms) {
+  const el = document.getElementById("perf-indicator");
+  if (!el) return;
+  if (fps > 0) {
+    el.textContent = `${fps} fps · ${latency_ms} ms`;
+    el.style.color = fps >= 25 ? "var(--success)" : fps >= 15 ? "var(--warning)" : "var(--danger)";
+  }
 }
 
 let alertTimeout = null;

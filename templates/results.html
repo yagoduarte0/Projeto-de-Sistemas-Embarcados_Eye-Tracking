@@ -195,6 +195,25 @@
       </div>
     </div>
 
+    <!-- Métricas do sistema -->
+    <div class="timeline-card" style="margin-bottom:20px;">
+      <h2>Métricas do Sistema</h2>
+      <div class="stats-row" style="margin-bottom:0;">
+        <div class="stat-card">
+          <div class="val" id="sys-fps" style="color:var(--success)">—</div>
+          <div class="lbl">FPS médio</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" id="sys-lat" style="color:var(--primary)">—</div>
+          <div class="lbl">Latência média (ms)</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" id="sys-det" style="color:var(--warning)">—</div>
+          <div class="lbl">Detecção facial</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Gráfico de distrações -->
     <div class="timeline-card">
       <h2>Eventos ao longo do tempo</h2>
@@ -247,6 +266,14 @@
       stats.iaf_mean != null ? `${stats.iaf_mean.toFixed(1)}%` : "—";
     document.getElementById("iaf-min").textContent =
       stats.iaf_min  != null ? `${stats.iaf_min.toFixed(1)}%`  : "—";
+
+    const sys = stats.system || {};
+    document.getElementById("sys-fps").textContent =
+      sys.fps_mean != null ? `${sys.fps_mean.toFixed(1)}` : "—";
+    document.getElementById("sys-lat").textContent =
+      sys.latency_mean_ms != null ? `${sys.latency_mean_ms.toFixed(1)}` : "—";
+    document.getElementById("sys-det").textContent =
+      sys.face_detection_rate != null ? `${sys.face_detection_rate.toFixed(1)}%` : "—";
 
     document.getElementById("generated-at").textContent =
       "Gerado em " + new Date().toLocaleString("pt-BR");

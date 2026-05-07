@@ -50,8 +50,28 @@
           </div>
         </div>
 
+        <div class="perf-indicator-wrap">
+          <span id="perf-indicator" class="perf-indicator">—</span>
+        </div>
+
         <div id="focus-indicator" class="focus-indicator neutral">
           <span id="focus-label">Aguardando...</span>
+        </div>
+
+        <!-- Calibração -->
+        <div class="calib-section">
+          <p class="calib-hint">
+            Calibre antes de usar pela primeira vez em um novo dispositivo
+            para garantir precisão independente do tamanho da tela.
+          </p>
+          <div class="calib-row">
+            <button class="btn btn-calib" id="btn-calib" onclick="requestCalibration()">
+              Calibrar
+            </button>
+            <button class="btn btn-resume hidden" id="btn-resume" onclick="resumeSession()">
+              ↩ Retomar Sessão
+            </button>
+          </div>
         </div>
       </div>
     </section>

@@ -26,9 +26,26 @@ def export_csv(stats: dict) -> bytes:
     writer.writerow(["Tempo distraído (s)", stats.get("total_distraction_secs", 0)])
     writer.writerow([])
 
+    sys = stats.get("system", {})
+    writer.writerow(["Métricas do Sistema", ""])
+    writer.writerow(["FPS médio",              sys.get("fps_mean", 0)])
+    writer.writerow(["FPS mínimo",             sys.get("fps_min", 0)])
+    writer.writerow(["Latência MediaPipe média (ms)", sys.get("latency_mean_ms", 0)])
+    writer.writerow(["Latência MediaPipe máxima (ms)", sys.get("latency_max_ms", 0)])
+    writer.writerow(["Taxa de detecção facial (%)", sys.get("face_detection_rate", 0)])
+    writer.writerow(["Frames totais processados", sys.get("total_frames", 0)])
+    writer.writerow([])
+
     writer.writerow(["Linha do tempo de eventos"])
-    writer.writerow(["Tipo", "Tempo na sessão (s)", "Detalhe"])
-    for ev in stats.get("events", []):
+    events = stats.get("events", [])
+    current_sub = None
+    for ev in events:
+        sub = ev.get("sub_session", 1)
+        if sub != current_sub:
+            current_sub = sub
+            writer.writerow([])
+            writer.writerow([f"=== Sessão {sub} ==="])
+            writer.writerow(["Tipo", "Tempo (s)", "Detalhe"])
         writer.writerow([ev["kind"], ev["timestamp"], ev["detail"]])
 
     return output.getvalue().encode("utf-8-sig")
@@ -77,6 +94,16 @@ def export_pdf(stats: dict) -> bytes:
         ("Tempo distraído",        f"{stats.get('total_distraction_secs', 0):.0f}s"),
     ]
 
+    sys_m = stats.get("system", {})
+    sys_metrics = [
+        ("FPS médio",              f"{sys_m.get('fps_mean', 0):.1f}"),
+        ("FPS mínimo",             f"{sys_m.get('fps_min', 0):.1f}"),
+        ("Latência média (ms)",    f"{sys_m.get('latency_mean_ms', 0):.1f}"),
+        ("Latência máxima (ms)",   f"{sys_m.get('latency_max_ms', 0):.1f}"),
+        ("Detecção facial",        f"{sys_m.get('face_detection_rate', 0):.1f}%"),
+        ("Frames processados",     str(sys_m.get('total_frames', 0))),
+    ]
+
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(0)
 
@@ -111,6 +138,38 @@ def export_pdf(stats: dict) -> bytes:
     if col != 0:
         pdf.ln(card_h + 4)
 
+    pdf.ln(4)
+
+    # ── Métricas do sistema ──────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(0)
+    pdf.cell(0, 8, "Métricas do Sistema", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    col = 0
+    card_h_sm = 16
+    for label, value in sys_metrics:
+        x = x_start + col * (card_w + 8)
+        y = pdf.get_y()
+        pdf.set_fill_color(240, 248, 255)
+        pdf.set_draw_color(200, 220, 240)
+        pdf.rect(x, y, card_w, card_h_sm, style="FD")
+        pdf.set_xy(x + 3, y + 1)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(100)
+        pdf.cell(card_w - 6, 4, label)
+        pdf.set_xy(x + 3, y + 6)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(60, 120, 200)
+        pdf.cell(card_w - 6, 8, value)
+        col += 1
+        if col == 2:
+            col = 0
+            pdf.ln(card_h_sm + 3)
+
+    if col != 0:
+        pdf.ln(card_h_sm + 3)
+
     pdf.ln(6)
 
     # ── Linha do tempo ───────────────────────────────────────────────────────
@@ -125,16 +184,7 @@ def export_pdf(stats: dict) -> bytes:
         pdf.set_text_color(150)
         pdf.cell(0, 8, "Nenhum evento registrado.", new_x="LMARGIN", new_y="NEXT")
     else:
-        # cabeçalho da tabela
-        pdf.set_fill_color(30, 144, 255)
-        pdf.set_text_color(255)
-        pdf.set_font("Helvetica", "B", 10)
-        col_widths = [35, 40, 100]
-        headers = ["Tempo (s)", "Tipo", "Detalhe"]
-        for i, h in enumerate(headers):
-            pdf.cell(col_widths[i], 8, h, border=1, fill=True)
-        pdf.ln()
-
+        has_multi_session = any(ev.get("sub_session", 1) > 1 for ev in events)
         kind_labels = {
             "side_gaze": "Olhar evasivo",
             "distraction": "Distração",
@@ -142,17 +192,39 @@ def export_pdf(stats: dict) -> bytes:
             "refocus": "Refoco",
         }
 
+        # cabeçalho da tabela
+        pdf.set_fill_color(30, 144, 255)
+        pdf.set_text_color(255)
+        pdf.set_font("Helvetica", "B", 10)
+        if has_multi_session:
+            col_widths = [20, 35, 40, 80]
+            headers = ["Sessão", "Tempo (s)", "Tipo", "Detalhe"]
+        else:
+            col_widths = [35, 40, 100]
+            headers = ["Tempo (s)", "Tipo", "Detalhe"]
+        for i, h in enumerate(headers):
+            pdf.cell(col_widths[i], 8, h, border=1, fill=True)
+        pdf.ln()
+
         for i, ev in enumerate(events):
             fill = i % 2 == 0
             pdf.set_fill_color(245, 247, 250) if fill else pdf.set_fill_color(255, 255, 255)
             pdf.set_text_color(0)
             pdf.set_font("Helvetica", "", 9)
 
-            row = [
-                f"{ev['timestamp']:.1f}",
-                kind_labels.get(ev["kind"], ev["kind"]),
-                ev.get("detail", ""),
-            ]
+            if has_multi_session:
+                row = [
+                    str(ev.get("sub_session", 1)),
+                    f"{ev['timestamp']:.1f}",
+                    kind_labels.get(ev["kind"], ev["kind"]),
+                    ev.get("detail", ""),
+                ]
+            else:
+                row = [
+                    f"{ev['timestamp']:.1f}",
+                    kind_labels.get(ev["kind"], ev["kind"]),
+                    ev.get("detail", ""),
+                ]
             for i, val in enumerate(row):
                 pdf.cell(col_widths[i], 7, val, border=1, fill=fill)
             pdf.ln()

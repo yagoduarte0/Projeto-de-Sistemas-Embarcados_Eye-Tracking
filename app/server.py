@@ -32,10 +32,16 @@ def on_event(event, stats):
     })
 
 
-def on_frame(jpeg_bytes, iaf):
+def on_frame(jpeg_bytes, iaf, fps=0.0, latency_ms=0.0, distracted=False):
     import base64
     b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
-    socketio.emit("frame", {"data": b64, "iaf": round(iaf * 100, 1)})
+    socketio.emit("frame", {
+        "data":       b64,
+        "iaf":        round(iaf * 100, 1),
+        "fps":        round(fps, 0),
+        "latency_ms": round(latency_ms, 0),
+        "distracted": distracted,
+    })
 
 
 def on_alert(message):
@@ -81,6 +87,24 @@ def start_session():
 def stop_session():
     tracker.stop_session()
     return jsonify({"ok": True, "stats": tracker.get_stats()})
+
+
+@app.route("/api/resume", methods=["POST"])
+def resume_session():
+    if tracker._running:
+        return jsonify({"error": "Sessão já em andamento"}), 400
+    if not tracker.session:
+        return jsonify({"error": "Nenhuma sessão para retomar"}), 400
+    tracker.resume_session()
+    return jsonify({"ok": True, "sub_session": tracker.session.sub_session})
+
+
+@app.route("/api/calibrate", methods=["POST"])
+def request_calibration():
+    if tracker._running:
+        return jsonify({"error": "Encerre a sessão antes de calibrar"}), 400
+    tracker.calibration_requested = True
+    return jsonify({"ok": True})
 
 
 @app.route("/api/stats")

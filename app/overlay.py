@@ -45,8 +45,18 @@ class StudyOverlay:
         self._build_compact()
         self._center_top_right()
         self._bind_drag()
+        self._poll_calibration()   # verifica flag calibration_requested periodicamente
 
         self.root.mainloop()
+
+    def _poll_calibration(self):
+        """Loop de polling para calibração disparada pela web."""
+        if self.root.winfo_exists():
+            if getattr(self.tracker, "calibration_requested", False):
+                self.tracker.calibration_requested = False
+                if self._mode != "running":
+                    self._open_check()
+            self.root.after(400, self._poll_calibration)
 
     # ── Layout compacto (idle / running) ──────────────────────────────────────
 
@@ -245,12 +255,18 @@ class StudyOverlay:
                   command=lambda: webbrowser.open("http://127.0.0.1:5000/api/export/csv")
                   ).pack(side="left", expand=True, fill="x", padx=(4, 0))
 
-        # nova sessão
+        # retomar / nova sessão
+        tk.Button(inner, text="↩  Retomar Sessão", bg=SUCCESS, fg="#fff", bd=0,
+                  cursor="hand2", font=("Segoe UI", 9, "bold"),
+                  padx=10, pady=5, activebackground="#009e78",
+                  command=self._resume_session
+                  ).pack(fill="x", pady=(8, 3))
+
         tk.Button(inner, text="Nova Sessão", bg=BG_CARD, fg=MUTED, bd=0,
                   cursor="hand2", font=("Segoe UI", 9),
                   padx=10, pady=5, activebackground=BORDER,
                   command=self._new_session
-                  ).pack(fill="x", pady=(8, 0))
+                  ).pack(fill="x")
 
     # ── Ações ─────────────────────────────────────────────────────────────────
 
@@ -266,6 +282,12 @@ class StudyOverlay:
             # abre o dashboard no browser com os resultados
             webbrowser.open(f"http://127.0.0.1:{self.port}/results")
             self.root.after(0, lambda: self._build_summary(stats))
+
+    def _resume_session(self):
+        self.tracker.resume_session()
+        self._btn_var.set("⏹  Parar Sessão")
+        self._build_compact()
+        self._center_top_right()
 
     def _new_session(self):
         self._build_compact()

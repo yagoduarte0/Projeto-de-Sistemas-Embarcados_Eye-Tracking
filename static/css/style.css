@@ -82,14 +82,14 @@ body {
 /* ── Main layout ─────────────────────────────────────────────────────────── */
 .main {
   display: grid;
-  grid-template-columns: 400px 1fr;
+  grid-template-columns: minmax(480px, 580px) 1fr;
   gap: 20px;
   padding: 20px 28px;
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .main { grid-template-columns: 1fr; }
 }
 
@@ -258,6 +258,52 @@ body {
 .event-badge.focus_lost  { background: rgba(255,209,102,.2); color: var(--yellow);  }
 
 .empty-state { color: var(--text-muted); font-style: italic; font-size: 13px; }
+
+/* ── Calibration section ─────────────────────────────────────────────────── */
+.calib-section {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.calib-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.calib-row {
+  display: flex;
+  gap: 8px;
+}
+.btn-calib {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  padding: 6px 14px;
+}
+.btn-resume {
+  background: var(--success);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+}
+
+/* ── Performance indicator ───────────────────────────────────────────────── */
+.perf-indicator-wrap {
+  text-align: right;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+.perf-indicator {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-family: "Segoe UI", monospace;
+}
 
 /* ── Export ──────────────────────────────────────────────────────────────── */
 .export-buttons { display: flex; gap: 10px; }

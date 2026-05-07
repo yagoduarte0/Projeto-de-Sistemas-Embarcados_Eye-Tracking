@@ -86,9 +86,9 @@ class CalibrationWindow:
             if not ret:
                 time.sleep(0.01)
                 continue
-            iris_raw, _, blink, v_raw = self.tracker._extract(frame)
+            iris_raw, _, blink, v_raw, avg_ear = self.tracker._extract(frame)
             if iris_raw is not None:
-                if blink:
+                if avg_ear < 0.15:
                     self.tracker._kalman_iris.predict()
                     self.tracker._kalman_v.predict()
                 else:
