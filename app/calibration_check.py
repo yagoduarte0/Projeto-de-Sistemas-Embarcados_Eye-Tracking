@@ -1,122 +1,254 @@
 """
-Tela de verificação pós-calibração.
-Mostra o ponto de gaze ao vivo para o usuário confirmar se está correto.
-Pressione ENTER para aceitar ou R para recalibrar.
+Calibração de 5 pontos do IAF (Índice de Atenção Focalizada).
+
+Uso normal (via overlay): CalibrationWindow(parent_root, tracker, on_done)
+Uso standalone (--calibrate): run_calibration(tracker)
+
+Salva resultado em ~/.cache/eyetrax/study_tracker_calib.json.
 """
 import cv2
-import numpy as np
+import json
 import time
-from collections import deque
+import threading
+import tkinter as tk
+import numpy as np
+from pathlib import Path
 
-from eyetrax import GazeEstimator
-from eyetrax.utils.screen import get_screen_size
-from eyetrax.utils.video import open_camera
+CALIB_FILE = Path.home() / ".cache" / "eyetrax" / "study_tracker_calib.json"
+
+# 0=centro  1=topo-esq  2=topo-dir  3=baixo-esq  4=baixo-dir
+CALIB_POINTS = [
+    (0.50, 0.50),
+    (0.15, 0.15),
+    (0.85, 0.15),
+    (0.15, 0.85),
+    (0.85, 0.85),
+]
+DWELL_SECS  = 2.5
+SETTLE_SECS = 0.7
+
+BG      = "#0f1117"
+BLUE    = "#1e90ff"
+GREEN   = "#00c896"
+MUTED   = "#7b82a8"
+WHITE   = "#e8eaf6"
+SURFACE = "#1a1d27"
 
 
-def run_calibration_check(estimator: GazeEstimator, camera_index: int = 0) -> bool:
+class CalibrationWindow:
     """
-    Abre uma janela fullscreen mostrando o ponto de gaze em tempo real.
-    Retorna True se o usuário aceitar, False se quiser recalibrar.
+    Janela de calibração como Toplevel dentro de um Tk existente.
+    Não bloqueia — usa after() para animação e thread para câmera.
+    Chama on_done(success: bool) quando terminar ou cancelar.
     """
-    sw, sh = get_screen_size()
-    cap = open_camera(camera_index)
 
-    WIN = "Verificar Calibração"
-    cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty(WIN, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    def __init__(self, parent: tk.Tk, tracker, on_done):
+        self.tracker  = tracker
+        self.on_done  = on_done
 
-    # histórico para suavizar o ponto
-    history = deque(maxlen=8)
+        self._state = {
+            "point_idx":  0,
+            "collecting": False,
+            "done":       False,
+            "cancelled":  False,
+        }
+        self._samples: list[list] = [[] for _ in CALIB_POINTS]
+        self._point_start = time.time()
 
-    # pontos de referência nos cantos + centro
-    ref_points = [
-        (int(sw * 0.1),  int(sh * 0.1)),
-        (int(sw * 0.9),  int(sh * 0.1)),
-        (int(sw * 0.5),  int(sh * 0.5)),
-        (int(sw * 0.1),  int(sh * 0.9)),
-        (int(sw * 0.9),  int(sh * 0.9)),
-    ]
+        self._top = tk.Toplevel(parent)
+        self._top.attributes("-topmost", True)
+        self._top.overrideredirect(True)          # sem barra de título
+        self._top.configure(bg=BG)
+        self._top.bind("<Escape>", self._on_escape)
 
-    result = True
-    frame_count = 0
+        self._sw = self._top.winfo_screenwidth()
+        self._sh = self._top.winfo_screenheight()
+        # Posiciona manualmente cobrindo a tela toda (confiável no Windows)
+        self._top.geometry(f"{self._sw}x{self._sh}+0+0")
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            continue
+        self._cv = tk.Canvas(self._top, bg=BG, highlightthickness=0)
+        self._cv.pack(fill="both", expand=True)
 
-        features, blink = estimator.extract_features(frame)
+        # Reutiliza a câmera já aberta do tracker — sem delay de inicialização
+        self._cap = tracker._cap
+        tracker._kalman_iris.reset()
+        tracker._kalman_v.reset()
+        self._cam_thread = threading.Thread(target=self._camera_loop, daemon=True)
+        self._cam_thread.start()
 
-        canvas = np.zeros((sh, sw, 3), dtype=np.uint8)
-        canvas[:] = (15, 17, 23)  # fundo escuro
+        self._top.after(150, self._draw)
 
-        # ── instruções ────────────────────────────────────────────────────
-        msg1 = "Olhe ao redor da tela — o circulo azul deve seguir seu olhar"
-        msg2 = "ENTER = calibracao OK    |    R = refazer calibracao    |    ESC = cancelar"
-        cv2.putText(canvas, msg1, (sw//2 - 420, 38),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
-        cv2.putText(canvas, msg2, (sw//2 - 440, sh - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (120, 120, 120), 1)
+    # ── Thread da câmera ──────────────────────────────────────────────────────
 
-        # ── pontos de referência (cruzes brancas) ─────────────────────────
-        for px, py in ref_points:
-            cv2.drawMarker(canvas, (px, py), (80, 80, 80),
-                           cv2.MARKER_CROSS, 30, 1)
+    def _camera_loop(self):
+        while not self._state["done"]:
+            ret, frame = self._cap.read()
+            if not ret:
+                time.sleep(0.01)
+                continue
+            iris_raw, _, blink, v_raw = self.tracker._extract(frame)
+            if iris_raw is not None:
+                if blink:
+                    self.tracker._kalman_iris.predict()
+                    self.tracker._kalman_v.predict()
+                else:
+                    ih = self.tracker._kalman_iris.update(iris_raw)
+                    iv = self.tracker._kalman_v.update(v_raw) if v_raw is not None \
+                         else self.tracker._kalman_v.predict()
+                    if self._state["collecting"]:
+                        idx = self._state["point_idx"]
+                        if idx < len(CALIB_POINTS):
+                            self._samples[idx].append((float(ih), float(iv)))
+            else:
+                self.tracker._kalman_iris.predict()
+                self.tracker._kalman_v.predict()
+        # Não libera — câmera pertence ao tracker e será reutilizada na sessão
 
-        # ── ponto de gaze ─────────────────────────────────────────────────
-        if features is not None and not blink:
-            try:
-                gx, gy = estimator.predict([features])[0]
-                history.append((gx, gy))
-            except Exception:
-                pass
+    # ── Animação (main thread via after) ─────────────────────────────────────
 
-        if len(history) >= 3:
-            avg_x = np.mean([p[0] for p in history])
-            avg_y = np.mean([p[1] for p in history])
-            px = int(np.clip(avg_x, 0, 1) * sw)
-            py = int(np.clip(avg_y, 0, 1) * sh)
+    def _draw(self):
+        if not self._top.winfo_exists() or self._state["done"]:
+            return
 
-            # sombra
-            cv2.circle(canvas, (px, py), 28, (20, 60, 120), -1)
-            # círculo externo
-            cv2.circle(canvas, (px, py), 24, (30, 144, 255), 2)
-            # ponto central
-            cv2.circle(canvas, (px, py), 6,  (30, 144, 255), -1)
+        idx     = self._state["point_idx"]
+        elapsed = time.time() - self._point_start
+        sw, sh  = self._sw, self._sh
+        cv      = self._cv
 
-            # indicador de qualidade (quanto do histórico está dentro da tela)
-            on_screen = sum(
-                1 for gx, gy in history
-                if -0.1 <= gx <= 1.1 and -0.1 <= gy <= 1.1
-            )
-            quality = on_screen / len(history)
-            q_color = (0, 200, 80) if quality > 0.7 else (0, 160, 255) if quality > 0.4 else (50, 50, 220)
-            label = "Rastreando" if quality > 0.7 else ("Parcial" if quality > 0.4 else "Fora da tela")
-            cv2.putText(canvas, label, (px + 30, py - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, q_color, 1)
-        else:
-            # sem detecção
-            cv2.putText(canvas, "Rosto nao detectado", (sw//2 - 160, sh//2),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (50, 50, 200), 2)
+        self._state["collecting"] = elapsed > SETTLE_SECS
 
-        # miniatura da câmera (canto inferior direito)
-        thumb_w, thumb_h = 200, 150
-        thumb = cv2.resize(frame, (thumb_w, thumb_h))
-        canvas[sh - thumb_h - 10: sh - 10, sw - thumb_w - 10: sw - 10] = thumb
+        cv.delete("all")
+        cv.create_rectangle(0, 0, sw, sh, fill=BG, outline="")
 
-        cv2.imshow(WIN, canvas)
+        cv.create_text(sw // 2, 44,
+                       text="Olhe fixamente para o círculo até a barra encher",
+                       fill=WHITE, font=("Segoe UI", 18, "bold"))
+        cv.create_text(sw // 2, 80,
+                       text=f"Ponto {idx + 1} de {len(CALIB_POINTS)}  —  ESC para cancelar",
+                       fill=MUTED, font=("Segoe UI", 13))
 
-        key = cv2.waitKey(1) & 0xFF
-        if key == 13 or key == ord(" "):   # ENTER ou ESPAÇO = aceitar
-            result = True
-            break
-        elif key == ord("r") or key == ord("R"):
-            result = False
-            break
-        elif key == 27:                    # ESC = cancelar
-            result = True
-            break
+        # Barra de progresso
+        bw, bh = 420, 12
+        bx = sw // 2 - bw // 2
+        by = sh - 60
+        prog      = min(1.0, elapsed / DWELL_SECS)
+        bar_color = GREEN if self._state["collecting"] else BLUE
+        cv.create_rectangle(bx, by, bx + bw, by + bh, fill=SURFACE, outline="")
+        cv.create_rectangle(bx, by, bx + int(bw * prog), by + bh, fill=bar_color, outline="")
 
-    cap.release()
-    cv2.destroyWindow(WIN)
-    return result
+        # Alvo
+        fx, fy = CALIB_POINTS[idx]
+        px, py = int(fx * sw), int(fy * sh)
+        r = 22
+        dot_color = GREEN if self._state["collecting"] else BLUE
+        cv.create_oval(px - r - 6, py - r - 6, px + r + 6, py + r + 6,
+                       outline=dot_color, width=2)
+        cv.create_oval(px - r, py - r, px + r, py + r, fill=dot_color, outline="")
+        cv.create_oval(px - 5, py - 5, px + 5, py + 5, fill=WHITE, outline="")
+
+        if elapsed >= DWELL_SECS:
+            self._state["point_idx"] += 1
+            self._point_start = time.time()
+            self._state["collecting"] = False
+
+            if self._state["point_idx"] >= len(CALIB_POINTS):
+                self._state["done"] = True
+                self._top.after(300, self._finish)
+                return
+
+        self._top.after(33, self._draw)
+
+    # ── Finalização ───────────────────────────────────────────────────────────
+
+    def _finish(self):
+        self._state["done"] = True
+        self._cam_thread.join(timeout=3.0)   # garante que ninguém mais lê a câmera
+
+        collected = {i: self._samples[i] for i in range(len(CALIB_POINTS))}
+        result    = _compute(collected)
+
+        success = False
+        if result is not None:
+            CALIB_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(CALIB_FILE, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2)
+            success = True
+
+        if self._top.winfo_exists():
+            self._top.destroy()
+        self.on_done(success)
+
+    def _on_escape(self, _event=None):
+        self._state["done"]      = True
+        self._state["cancelled"] = True
+        self._cam_thread.join(timeout=3.0)
+        if self._top.winfo_exists():
+            self._top.destroy()
+        self.on_done(False)
+
+
+# ── Standalone (main.py --calibrate) ─────────────────────────────────────────
+
+def run_calibration(tracker) -> bool:
+    """
+    Modo standalone: cria janela Tk própria, bloqueia até terminar.
+    Usar apenas fora do loop do overlay (ex: main.py --calibrate).
+    """
+    result = [False]
+
+    def on_done(success: bool):
+        result[0] = success
+        root.quit()
+
+    root = tk.Tk()
+    root.withdraw()   # esconde janela vazia — só o Toplevel é visível
+    CalibrationWindow(root, tracker, on_done)
+    root.mainloop()
+    root.destroy()
+    return result[0]
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _compute(collected: dict) -> dict | None:
+    def mh(indices):
+        vals = [s[0] for i in indices for s in collected.get(i, [])]
+        return float(np.mean(vals)) if vals else None
+
+    def mv(indices):
+        vals = [s[1] for i in indices for s in collected.get(i, [])]
+        return float(np.mean(vals)) if vals else None
+
+    left_h  = mh([1, 3])
+    right_h = mh([2, 4])
+    top_v   = mv([1, 2])
+    bot_v   = mv([3, 4])
+    cen_h   = mh([0])
+    cen_v   = mv([0])
+
+    if any(x is None for x in [left_h, right_h, top_v, bot_v, cen_h, cen_v]):
+        return None
+
+    center_h = (left_h + right_h) / 2
+    center_v = (top_v  + bot_v)  / 2
+    flat_h   = min(abs(center_h - left_h), abs(right_h - center_h)) * 0.85
+    flat_v   = min(abs(center_v - top_v),  abs(bot_v  - center_v)) * 0.85
+    flat_h   = max(flat_h, 0.03)
+    flat_v   = max(flat_v, 0.04)
+
+    return {
+        "iris_center_h": round(center_h, 4),
+        "iris_center_v": round(center_v, 4),
+        "iris_flat_h":   round(flat_h,   4),
+        "iris_flat_v":   round(flat_v,   4),
+    }
+
+
+def load_calibration() -> dict | None:
+    if not CALIB_FILE.exists():
+        return None
+    try:
+        with open(CALIB_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None

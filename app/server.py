@@ -32,10 +32,10 @@ def on_event(event, stats):
     })
 
 
-def on_frame(jpeg_bytes):
+def on_frame(jpeg_bytes, iaf):
     import base64
     b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
-    socketio.emit("frame", {"data": b64})
+    socketio.emit("frame", {"data": b64, "iaf": round(iaf * 100, 1)})
 
 
 def on_alert(message):

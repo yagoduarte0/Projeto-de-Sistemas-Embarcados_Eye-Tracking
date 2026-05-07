@@ -39,6 +39,17 @@
             <span>Sessão não iniciada</span>
           </div>
         </div>
+        <!-- IAF gauge — atualizado a cada frame via WebSocket -->
+        <div class="iaf-gauge">
+          <div class="iaf-gauge-header">
+            <span class="iaf-gauge-label">IAF — Índice de Atenção Focalizada</span>
+            <span class="iaf-gauge-value" id="iaf-gauge-value">—</span>
+          </div>
+          <div class="iaf-bar-track">
+            <div class="iaf-bar-fill" id="iaf-bar-fill" style="width:0%"></div>
+          </div>
+        </div>
+
         <div id="focus-indicator" class="focus-indicator neutral">
           <span id="focus-label">Aguardando...</span>
         </div>
@@ -55,22 +66,26 @@
           <div class="metric-label">Foco</div>
         </div>
         <div class="metric-card">
+          <div class="metric-value accent-green" id="m-iaf-mean">—</div>
+          <div class="metric-label">IAF médio</div>
+        </div>
+        <div class="metric-card">
           <div class="metric-value accent-red" id="m-distractions">0</div>
-          <div class="metric-label">Distrações</div>
+          <div class="metric-label">Eventos</div>
         </div>
         <div class="metric-card">
           <div class="metric-value accent-orange" id="m-side">0</div>
-          <div class="metric-label">Olhares evasivos</div>
+          <div class="metric-label">Ol. evasivos</div>
         </div>
         <div class="metric-card">
           <div class="metric-value accent-yellow" id="m-focus-lost">0</div>
-          <div class="metric-label">Perdas de foco</div>
+          <div class="metric-label">Perda de foco</div>
         </div>
       </div>
 
-      <!-- Gráfico de foco ao longo do tempo -->
+      <!-- Gráfico de IAF ao longo do tempo -->
       <div class="card chart-card">
-        <h2 class="card-title">Atenção ao longo da sessão</h2>
+        <h2 class="card-title">IAF ao longo da sessão</h2>
         <canvas id="focus-chart" height="120"></canvas>
       </div>
 

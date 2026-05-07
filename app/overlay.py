@@ -54,8 +54,11 @@ class StudyOverlay:
         self._clear()
         self._mode = "idle" if not self.tracker._running else "running"
 
+        from app.calibration_check import load_calibration
+        is_calibrated = load_calibration() is not None
+
         root = self.root
-        root.geometry("300x220")
+        root.geometry("300x260" if not is_calibrated else "300x220")
 
         outer = tk.Frame(root, bg=BORDER, padx=1, pady=1)
         outer.pack(fill="both", expand=True)
@@ -74,8 +77,27 @@ class StudyOverlay:
 
         tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(8, 10))
 
+        if not is_calibrated:
+            # ── aviso de calibração pendente ──────────────────────────────────
+            warn = tk.Frame(inner, bg=BG_CARD, padx=10, pady=10,
+                            highlightthickness=1, highlightbackground=WARNING)
+            warn.pack(fill="x", pady=(0, 10))
+            tk.Label(warn, text="Calibração necessária", bg=BG_CARD, fg=WARNING,
+                     font=("Segoe UI", 10, "bold")).pack()
+            tk.Label(warn, text="Execute a calibração antes\nde iniciar uma sessão.",
+                     bg=BG_CARD, fg=MUTED, font=("Segoe UI", 8),
+                     justify="center").pack(pady=(4, 0))
+
+            tk.Button(
+                inner, text="▶  Calibrar agora", bg=PRIMARY, fg="#fff",
+                bd=0, cursor="hand2", font=("Segoe UI", 10, "bold"),
+                padx=12, pady=6, activebackground="#1677cc", activeforeground="#fff",
+                command=self._open_check
+            ).pack(fill="x")
+            return   # não mostra timer/métricas/botão iniciar enquanto não calibrado
+
         # ── timer ─────────────────────────────────────────────────────────────
-        self._timer_var = tk.StringVar(value="00:00")
+        self._timer_var  = tk.StringVar(value="00:00")
         self._status_var = tk.StringVar(value="Aguardando...")
 
         timer_frame = tk.Frame(inner, bg=BG)
@@ -92,17 +114,17 @@ class StudyOverlay:
         grid.pack(fill="x")
 
         self._vars = {
-            "focus":      tk.StringVar(value="—"),
-            "dist":       tk.StringVar(value="0"),
-            "side":       tk.StringVar(value="0"),
-            "lost":       tk.StringVar(value="0"),
+            "focus": tk.StringVar(value="—"),
+            "dist":  tk.StringVar(value="0"),
+            "side":  tk.StringVar(value="0"),
+            "lost":  tk.StringVar(value="0"),
         }
 
         items = [
-            ("Foco",           self._vars["focus"], PRIMARY),
-            ("Distrações",     self._vars["dist"],  DANGER),
-            ("Ol. evasivos",   self._vars["side"],  WARNING),
-            ("Perda de foco",  self._vars["lost"],  YELLOW),
+            ("Foco",          self._vars["focus"], PRIMARY),
+            ("Eventos",       self._vars["dist"],  DANGER),
+            ("Ol. evasivos",  self._vars["side"],  WARNING),
+            ("Perda de foco", self._vars["lost"],  YELLOW),
         ]
 
         for i, (label, var, color) in enumerate(items):
@@ -112,7 +134,6 @@ class StudyOverlay:
                             highlightthickness=1, highlightbackground=BORDER)
             cell.grid(row=row, column=col, padx=3, pady=3, sticky="nsew")
             grid.columnconfigure(col, weight=1)
-
             tk.Label(cell, textvariable=var, bg=BG_CARD, fg=color,
                      font=("Segoe UI", 16, "bold")).pack()
             tk.Label(cell, text=label, bg=BG_CARD, fg=MUTED,
@@ -130,9 +151,8 @@ class StudyOverlay:
         )
         self._action_btn.pack(fill="x")
 
-        # ── botão verificar rastreamento ──────────────────────────────────────
         tk.Button(
-            inner, text="Verificar rastreamento", bg=BG_CARD, fg=MUTED,
+            inner, text="Recalibrar", bg=BG_CARD, fg=MUTED,
             bd=0, cursor="hand2", font=("Segoe UI", 8),
             padx=8, pady=4, activebackground=BORDER,
             command=self._open_check
@@ -192,10 +212,10 @@ class StudyOverlay:
 
         # métricas
         rows = [
-            ("Distrações totais",   stats.get("total_distractions", 0),    DANGER),
-            ("Olhares evasivos",    stats.get("gaze_away_count", 0),         WARNING),
-            ("Perdas de foco",      stats.get("focus_lost_count", 0),       YELLOW),
-            ("Tempo distraído",     f"{stats.get('total_distraction_secs', 0):.0f}s", MUTED),
+            ("Eventos totais",   stats.get("total_distractions", 0),    DANGER),
+            ("Olhares evasivos", stats.get("gaze_away_count", 0),        WARNING),
+            ("Perdas de foco",   stats.get("focus_lost_count", 0),       YELLOW),
+            ("Tempo distraído",  f"{stats.get('total_distraction_secs', 0):.0f}s", MUTED),
         ]
 
         for label, value, color in rows:
@@ -252,12 +272,16 @@ class StudyOverlay:
         self._center_top_right()
 
     def _open_check(self):
-        """Abre a tela de verificação do rastreamento em thread separada."""
-        import threading
-        from app.calibration_check import run_calibration_check
-        def run():
-            run_calibration_check(self.tracker.estimator, self.tracker.camera_index)
-        threading.Thread(target=run, daemon=True).start()
+        """Abre calibração de 5 pontos como Toplevel (sem thread separada para UI)."""
+        from app.calibration_check import CalibrationWindow
+
+        def on_done(success: bool):
+            if success:
+                self.tracker._load_calibration()
+            self._build_compact()
+            self._center_top_right()
+
+        CalibrationWindow(self.root, self.tracker, on_done)
 
     # ── Tick de atualização ───────────────────────────────────────────────────
 

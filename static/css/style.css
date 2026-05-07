@@ -135,15 +135,56 @@ body {
 .focus-indicator.distracted{ background: rgba(255,77,109,.15); color: var(--danger);  border: 1px solid var(--danger);  }
 .focus-indicator.neutral   { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
 
+/* ── IAF gauge ───────────────────────────────────────────────────────────── */
+.iaf-gauge {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.iaf-gauge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.iaf-gauge-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--text-muted);
+}
+.iaf-gauge-value {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+  transition: color .3s;
+}
+.iaf-bar-track {
+  height: 8px;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.iaf-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--primary);
+  transition: width .2s ease, background .3s;
+}
+.iaf-bar-fill.high { background: var(--success); }
+.iaf-bar-fill.mid  { background: var(--warning); }
+.iaf-bar-fill.low  { background: var(--danger);  }
+
 /* ── Metrics grid ────────────────────────────────────────────────────────── */
 .metrics-section { display: flex; flex-direction: column; gap: 16px; }
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 12px;
-}
-@media (max-width: 1100px) {
-  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .metric-card {
   background: var(--surface);
@@ -164,6 +205,7 @@ body {
 .metric-value.accent-red    { color: var(--danger); }
 .metric-value.accent-orange { color: var(--warning); }
 .metric-value.accent-yellow { color: var(--yellow); }
+.metric-value.accent-green  { color: var(--success); }
 .metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; }
 
 /* ── Chart ───────────────────────────────────────────────────────────────── */

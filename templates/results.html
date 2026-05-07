@@ -167,11 +167,23 @@
       </div>
     </div>
 
+    <!-- Cards IAF -->
+    <div class="stats-row" style="margin-bottom:14px;">
+      <div class="stat-card" style="border-color: var(--success);">
+        <div class="val" id="iaf-mean" style="color:var(--success)">—</div>
+        <div class="lbl">IAF médio</div>
+      </div>
+      <div class="stat-card" style="border-color: var(--warning);">
+        <div class="val" id="iaf-min" style="color:var(--warning)">—</div>
+        <div class="lbl">IAF mínimo</div>
+      </div>
+    </div>
+
     <!-- Cartões de métricas -->
     <div class="stats-row">
       <div class="stat-card">
         <div class="val accent-red"  id="total-dist">0</div>
-        <div class="lbl">Distrações totais</div>
+        <div class="lbl">Eventos totais</div>
       </div>
       <div class="stat-card">
         <div class="val accent-orange" id="side-gaze">0</div>
@@ -185,7 +197,7 @@
 
     <!-- Gráfico de distrações -->
     <div class="timeline-card">
-      <h2>Distrações ao longo do tempo</h2>
+      <h2>Eventos ao longo do tempo</h2>
       <canvas id="dist-chart" height="90"></canvas>
     </div>
 
@@ -230,6 +242,11 @@
     document.getElementById("total-dist").textContent = stats.total_distractions ?? 0;
     document.getElementById("side-gaze").textContent  = stats.gaze_away_count ?? 0;
     document.getElementById("focus-lost").textContent = stats.focus_lost_count ?? 0;
+
+    document.getElementById("iaf-mean").textContent =
+      stats.iaf_mean != null ? `${stats.iaf_mean.toFixed(1)}%` : "—";
+    document.getElementById("iaf-min").textContent =
+      stats.iaf_min  != null ? `${stats.iaf_min.toFixed(1)}%`  : "—";
 
     document.getElementById("generated-at").textContent =
       "Gerado em " + new Date().toLocaleString("pt-BR");

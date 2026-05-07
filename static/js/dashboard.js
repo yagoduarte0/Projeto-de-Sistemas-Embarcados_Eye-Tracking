@@ -5,22 +5,21 @@ const socket = io();
 let sessionRunning = false;
 let sessionStart = null;
 let timerInterval = null;
-let lastDistracted = false;
 
-// ── Gráfico de foco ───────────────────────────────────────────────────────────
+// ── Gráfico de IAF ao longo da sessão ────────────────────────────────────────
 const focusCtx = document.getElementById("focus-chart").getContext("2d");
 const focusChart = new Chart(focusCtx, {
   type: "line",
   data: {
     labels: [],
     datasets: [{
-      label: "Foco (%)",
+      label: "IAF (%)",
       data: [],
       borderColor: "#1e90ff",
       backgroundColor: "rgba(30,144,255,.12)",
       borderWidth: 2,
       pointRadius: 0,
-      tension: 0.4,
+      tension: 0.35,
       fill: true,
     }],
   },
@@ -41,11 +40,11 @@ const focusChart = new Chart(focusCtx, {
 
 let chartTick = 0;
 
-function pushFocusPoint(focusPct) {
+function pushIAFPoint(iafPct) {
   chartTick++;
   focusChart.data.labels.push(chartTick);
-  focusChart.data.datasets[0].data.push(focusPct);
-  if (focusChart.data.labels.length > 120) {
+  focusChart.data.datasets[0].data.push(iafPct);
+  if (focusChart.data.labels.length > 180) {
     focusChart.data.labels.shift();
     focusChart.data.datasets[0].data.shift();
   }
@@ -86,6 +85,7 @@ async function startSession() {
   focusChart.data.labels = [];
   focusChart.data.datasets[0].data = [];
   focusChart.update("none");
+  setIAFGauge(null);
   startTimer();
 }
 
@@ -100,6 +100,7 @@ async function stopSession() {
   document.getElementById("camera-feed").src = "";
   document.getElementById("camera-placeholder").style.display = "flex";
   setFocusIndicator(null);
+  setIAFGauge(null);
   if (data.stats) updateMetrics(data.stats);
 }
 
@@ -113,14 +114,17 @@ function exportReport(format) {
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
-socket.on("frame", ({ data }) => {
+socket.on("frame", ({ data, iaf }) => {
   if (!sessionRunning) return;
   document.getElementById("camera-feed").src = `data:image/jpeg;base64,${data}`;
+  if (iaf != null) {
+    setIAFGauge(iaf);
+    pushIAFPoint(iaf);
+  }
 });
 
 socket.on("stats_update", (stats) => {
   updateMetrics(stats);
-  pushFocusPoint(stats.focus_percentage ?? 100);
 });
 
 socket.on("new_event", (ev) => {
@@ -142,6 +146,11 @@ function updateMetrics(stats) {
   document.getElementById("m-side").textContent = stats.gaze_away_count ?? 0;
   document.getElementById("m-focus-lost").textContent = stats.focus_lost_count ?? 0;
 
+  if (stats.iaf_mean != null) {
+    const el = document.getElementById("m-iaf-mean");
+    if (el) el.textContent = `${stats.iaf_mean.toFixed(1)}%`;
+  }
+
   const focused = (stats.focus_percentage ?? 100) > 70;
   setFocusIndicator(focused);
 }
@@ -149,9 +158,7 @@ function updateMetrics(stats) {
 function setFocusIndicator(focused) {
   const el = document.getElementById("focus-indicator");
   const label = document.getElementById("focus-label");
-
   el.classList.remove("focused", "distracted", "neutral");
-
   if (focused === null) {
     el.classList.add("neutral");
     label.textContent = "Aguardando...";
@@ -164,18 +171,44 @@ function setFocusIndicator(focused) {
   }
 }
 
+function setIAFGauge(iafPct) {
+  const bar  = document.getElementById("iaf-bar-fill");
+  const val  = document.getElementById("iaf-gauge-value");
+  if (!bar || !val) return;
+
+  if (iafPct == null) {
+    bar.style.width = "0%";
+    bar.className = "iaf-bar-fill";
+    val.textContent = "—";
+    val.style.color = "var(--text-muted)";
+    return;
+  }
+
+  bar.style.width = `${iafPct}%`;
+  val.textContent = `${iafPct.toFixed(1)}%`;
+
+  if (iafPct >= 70) {
+    bar.className = "iaf-bar-fill high";
+    val.style.color = "var(--success)";
+  } else if (iafPct >= 40) {
+    bar.className = "iaf-bar-fill mid";
+    val.style.color = "var(--warning)";
+  } else {
+    bar.className = "iaf-bar-fill low";
+    val.style.color = "var(--danger)";
+  }
+}
+
 function addEventItem(ev) {
   const list = document.getElementById("events-list");
-
-  // remover estado vazio
   const empty = list.querySelector(".empty-state");
   if (empty) empty.remove();
 
   const kindLabels = {
-    side_gaze: "Olhar evasivo",
+    side_gaze:  "Olhar evasivo",
     distraction: "Distração",
-    focus_lost: "Perda de foco",
-    refocus: "Refoco",
+    focus_lost:  "Perda de foco",
+    refocus:     "Refoco",
   };
 
   const item = document.createElement("div");
@@ -185,10 +218,7 @@ function addEventItem(ev) {
     <span class="event-badge ${ev.kind}">${kindLabels[ev.kind] ?? ev.kind}</span>
     <span class="event-detail">${ev.detail ?? ""}</span>
   `;
-
   list.prepend(item);
-
-  // limitar a 50 itens
   while (list.children.length > 50) list.removeChild(list.lastChild);
 }
 
@@ -197,7 +227,6 @@ function showAlert(message) {
   const banner = document.getElementById("alert-banner");
   document.getElementById("alert-text").textContent = message;
   banner.classList.remove("hidden");
-
   clearTimeout(alertTimeout);
   alertTimeout = setTimeout(() => banner.classList.add("hidden"), 5000);
 }

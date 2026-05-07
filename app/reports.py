@@ -18,7 +18,9 @@ def export_csv(stats: dict) -> bytes:
     writer.writerow(["Métrica", "Valor"])
     writer.writerow(["Duração (s)", stats.get("duration_secs", 0)])
     writer.writerow(["Foco (%)", stats.get("focus_percentage", 0)])
-    writer.writerow(["Total de distrações", stats.get("total_distractions", 0)])
+    writer.writerow(["IAF médio (%)", stats.get("iaf_mean", 0)])
+    writer.writerow(["IAF mínimo (%)", stats.get("iaf_min", 0)])
+    writer.writerow(["Total de eventos", stats.get("total_distractions", 0)])
     writer.writerow(["Olhares evasivos", stats.get("gaze_away_count", 0)])
     writer.writerow(["Perdas de foco", stats.get("focus_lost_count", 0)])
     writer.writerow(["Tempo distraído (s)", stats.get("total_distraction_secs", 0)])
@@ -65,12 +67,14 @@ def export_pdf(stats: dict) -> bytes:
 
     # ── Cartões de métricas ──────────────────────────────────────────────────
     metrics = [
-        ("Duração da sessão", f"{mins}m {secs}s"),
-        ("Foco geral", f"{stats.get('focus_percentage', 0):.1f}%"),
-        ("Distrações totais", str(stats.get("total_distractions", 0))),
-        ("Olhares evasivos", str(stats.get("gaze_away_count", 0))),
-        ("Perdas de foco", str(stats.get("focus_lost_count", 0))),
-        ("Tempo distraído", f"{stats.get('total_distraction_secs', 0):.0f}s"),
+        ("Duração da sessão",      f"{mins}m {secs}s"),
+        ("Foco geral",             f"{stats.get('focus_percentage', 0):.1f}%"),
+        ("IAF médio",              f"{stats.get('iaf_mean', 0):.1f}%"),
+        ("IAF mínimo",             f"{stats.get('iaf_min', 0):.1f}%"),
+        ("Eventos totais",          str(stats.get("total_distractions", 0))),
+        ("Olhares evasivos",       str(stats.get("gaze_away_count", 0))),
+        ("Perdas de foco",         str(stats.get("focus_lost_count", 0))),
+        ("Tempo distraído",        f"{stats.get('total_distraction_secs', 0):.0f}s"),
     ]
 
     pdf.set_font("Helvetica", "B", 11)
